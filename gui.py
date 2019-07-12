@@ -240,7 +240,7 @@ class ReaderView(urwid.WidgetWrap):
             div,
             div_bar,
             div,
-            urwid.Padding(urwid.Button(u'Delete entry', self.on_delete),
+            urwid.Padding(urwid.Button(u'Delete entry', self.on_delete, id),
                         align='center', width=('relative', 20)),
             div,
         ])
@@ -261,8 +261,9 @@ class ReaderView(urwid.WidgetWrap):
     def on_to_menu(self, button):
         self.controller.set_view('menu')
     
-    def on_delete(self, button):
-        pass
+    def on_delete(self, button, id):
+        self.controller.db_handler.remove_entry(id)
+        self.controller.set_view('reader') # For now this resets the view so that the removed item is not shown anymore
 
 class Diary:
     """

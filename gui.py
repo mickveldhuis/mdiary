@@ -2,6 +2,12 @@ import urwid
 from configparser import ConfigParser
 import argparse
 from pathlib import Path
+from diary_db import DBHandler
+
+def to_file(txt, fn='_output.txt'):
+    file = open(fn, 'w+')
+    file.write(txt)
+    file.close()
 
 PALETTE = [
     ('edit_body', 'black', 'light green'),
@@ -12,7 +18,7 @@ PALETTE = [
     ('button', 'white', 'black')
 ]
 
-class MainView(urwid.WidgetWrap):
+class WriterView(urwid.WidgetWrap):
     """
         Class responsible for providing the main application window.
     """
@@ -38,8 +44,9 @@ class MainView(urwid.WidgetWrap):
         btn_quit = urwid.Button(('button', u'Quit'), self.on_quit)
         btn_save = urwid.Button(('button', u'Save & Exit'), self.on_save)
         btn_append = urwid.Button(('button', u'Add to diary'), self.on_append)
+        btn_menu = urwid.Button(('button', u'To menu'), self.on_to_menu)
 
-        footer = urwid.Columns([btn_append, div, btn_save, div, btn_quit])
+        footer = urwid.Columns([btn_append, div, btn_save, div, btn_menu, div, btn_quit])
         footer = urwid.AttrMap(footer, 'footer')
 
         # Container
@@ -55,22 +62,20 @@ class MainView(urwid.WidgetWrap):
     def on_save(self, button):
         txt = self.edit_field.get_text()[0]
 
-        file = open('current_.txt', 'w')
-        file.write(txt)
-        file.close()
-
+        self.controller.db_handler.new_entry(txt)
         self.quit_program()
 
     def on_quit(self, button):
         self.quit_program()
+    
+    def on_to_menu(self, button):
+        self.controller.set_view('menu')
 
     def on_append(self, button):
         txt = self.edit_field.get_text()[0]
         self.edit_field.set_edit_text(u'')
         
-        file = open('current_.txt', 'w')
-        file.write(txt)
-        file.close()
+        self.controller.db_handler.new_entry(txt)
 
 class InitView(urwid.WidgetWrap):
     """
@@ -137,83 +142,240 @@ class InitView(urwid.WidgetWrap):
     def quit_program(self):
         raise urwid.ExitMainLoop()
 
+    def on_quit(self, button):
+        self.quit_program()
+
     def on_confirm_quit(self, button):
         self.confirm_config()
         self.quit_program()
 
+    def on_confirm_continue(self, button):
+        self.confirm_config()
+        self.controller.set_view('menu')
+
+class MenuView(urwid.WidgetWrap):
+    """
+        Class responsible for providing the initialization window.
+    """
+    def __init__(self, controller):
+        self.controller = controller
+        urwid.WidgetWrap.__init__(self, self.window())
+
+    def window(self):
+        div = urwid.Divider()
+        div_bar = urwid.Divider('-')
+
+        listbox_content = [
+            urwid.Padding(urwid.Button(('button', u'New entry'), self.on_to_writer),
+                          align='center', width=('relative', 50)),
+            urwid.Padding(urwid.Button(('button', u'View entries'), self.on_to_reader), 
+                          align='center', width=('relative', 50)),
+            urwid.Padding(urwid.Button(('button', u'Quit'), self.on_quit), 
+                           align='center', width=('relative', 50))
+        ]
+
+        listbox = urwid.ListBox(urwid.SimpleFocusListWalker(listbox_content))
+        view = urwid.AttrMap(listbox, 'body')
+        view = urwid.LineBox(view, title='mDiary: Menu')
+
+        return view
+
+    def quit_program(self):
+        raise urwid.ExitMainLoop()
+
     def on_quit(self, button):
         self.quit_program()
 
-    def on_confirm_continue(self, button):
-        self.confirm_config()
-        self.controller.set_state('main')
+    def on_to_writer(self, button):
+        self.controller.set_view('writer')
+
+    def on_to_reader(self, button):
+        self.controller.set_view('reader')
+
+class ReaderView(urwid.WidgetWrap):
+    """
+        Class responsible for providing the main application window.
+    """
+    def __init__(self, controller):
+        self.controller = controller
+
+        urwid.WidgetWrap.__init__(self, self.window())
+
+    def window(self):
+        div = urwid.Divider()
+        div_bar = urwid.Divider('-')
+
+        menu_btn = urwid.Button(u'To menu', self.on_to_menu)
+        quit_btn = urwid.Button(('button', u'Quit'), self.on_quit)
+
+        col = urwid.Columns([
+            urwid.Padding(menu_btn, align='center', width=('relative', 50)), 
+            urwid.Padding(quit_btn, align='center', width=('relative', 50))
+        ])
+
+        listbox_content = [col, div]
+
+        for entry in self.controller.db_handler.get_entries():
+            entry_box = self.gen_entry(entry['entry_id'], entry['timestamp'], entry['entry_text'])
+            listbox_content += [entry_box, div]
+
+        listbox_content += [col]
+
+        listbox = urwid.ListBox(urwid.SimpleFocusListWalker(listbox_content))
+        view = urwid.AttrMap(listbox, 'body')
+        view = urwid.LineBox(view, title='mDiary: Menu')
+        to_file(type(view).__name__)
+        return view
+    
+    def gen_entry(self, id, date, txt):
+        """
+            Returns a listbox containing the information about diary entries.
+        """
+        div = urwid.Divider()
+        div_bar = urwid.Divider('-')
+
+        pile = urwid.Pile([
+            div,
+            urwid.Padding(urwid.Text(txt), align='center', width=('relative', 90)),
+            div,
+            div_bar,
+            div,
+            urwid.Padding(urwid.Button(u'Delete entry', self.on_delete),
+                        align='center', width=('relative', 20)),
+            div,
+        ])
+        
+        pile = urwid.AttrMap(pile, 'body')
+        entry_lb = urwid.Padding(urwid.LineBox(pile, title='Entry no. {} on {}-{}-{} ({}:{}):'.format(
+                                 id, date.year, date.month, date.day, date.hour, date.minute)), 
+                                 align='center', width=('relative', 80))
+
+        return entry_lb
+
+    def quit_program(self):
+        raise urwid.ExitMainLoop()
+
+    def on_quit(self, button):
+        self.quit_program()
+
+    def on_to_menu(self, button):
+        self.controller.set_view('menu')
+    
+    def on_delete(self, button):
+        pass
 
 class Diary:
     """
         Class controlling the behaviour of the application,
         handling the views etc.
     """
-    CONFIG_FILE = 'mdiary.conf'
 
     def __init__(self):
-        self.states = {
+        self.config_path = Path.home() / '.config' / 'mdiary'
+        self.config_file = self.config_path / 'mdiary.conf'
+        self.config = ConfigParser()
+        self.db_handler = None
+
+        self.views = {
             'init': InitView(self),
-            'main': MainView(self),
-            'errs': None
+            'writer': WriterView(self),
+            'menu': MenuView(self)
         }
 
-        self.view = self.states['main']
-        self.config = ConfigParser()
-
     def main(self):
-        # parser = argparse.ArgumentParser(description='A simple terminal diary, written in Python, with encryption possibilities.')
-        # parser.add_argument('--key', '-k', help='Diary safety key!',
-        #                     action='store', dest='key')
-        # parser.add_argument('--version', '-v', action='version', version='mdiary 0.0.1')
-        # parser_results = parser.parse_args()
+        """
+            The main function.
+        """
+        if not self.config_path.is_dir():
+            self.config_path.mkdir(exist_ok=True)
 
-        # ifs self.get_config().using_key and parser_results.key:
+        parser = argparse.ArgumentParser(description='A simple terminal diary, written in Python, with encryption possibilities.')
+        parser.add_argument('--key', '-k', help='Diary safety key!',
+                            action='store', dest='key')
+        parser.add_argument('--reset', '-r', help='Reset the configuration file.',
+                        action='store_true', dest='reset')
+        parser.add_argument('--version', '-v', action='version', version='mdiary 0.0.2')
+        parser_results = parser.parse_args()
+ 
+        # if self.get_config().using_key and parser_results.key:
         #     self.key_file = parser_results.key
         # elif self.get_config().using_key and not parser_results.key:
         #     print('Use your key to get access to the diary by using the [--key, -k KEY] argument!')
         #     sys.exit()
 
-        if not Path(Diary.CONFIG_FILE).is_file():
-            self.view = self.set_state('init')
-        
-        self.loop = urwid.MainLoop(self.view,  PALETTE)
+        if parser_results.reset and self.config_file.is_file():
+            self.reset_config()
+
+        if not self.config_file.is_file():
+            init_view = self.views['init']
+        else:
+            init_view = self.views['menu']
+            self.gen_db()
+
+        self.loop = urwid.MainLoop(init_view, PALETTE)
         self.loop.run()
 
-    def set_state(self, state):
-        if state == 'main':
-            self.view = self.states['main']
-        elif state == 'init':
-            self.view = self.states['init']
-        # elif state == 'errs':
-        #     self.view = self.states['errs']
+    def set_view(self, id='menu'):
+        """
+            Set the view to either 'writer', 'reader', 'menu' or 'init'.
+        """
+        if id == 'reader':
+            self.loop.widget = ReaderView(self)
+        else:
+            self.loop.widget = self.views[id]
 
     def gen_config(self, db_name, using_key):
+        """
+            Generate an ini like configuration file with
+            parameters 'db' for the database name and location, 
+            and 'using_key' which stores True/False depending
+            on whether one want to use a secret key to encrypt 
+            the diary entries (functionality nog yet implemented!).
+        """
         self.config['settings'] = {
             'db': db_name + '.db',
             'using_key': using_key
         }
 
-        with open(Diary.CONFIG_FILE, 'w') as f:
+        with self.config_file.open(mode='w') as f:
             self.config.write(f)
-    
+        
+        self.gen_db()
+
     def get_config(self):
-        self.config.read(Diary.CONFIG_FILE)
+        """
+            Returns the retrieved configuration file's contents.
+        """
+        self.config.read(self.config_file)
         conf = {
-            'db': self.config.get('setting', 'db'),
-            'using_key': self.config.getboolean('setting', 'using_key')
+            'db': self.config.get('settings', 'db'),
+            'using_key': self.config.getboolean('settings', 'using_key')
         }
 
         return conf
 
+    def reset_config(self):
+        """
+            Resets the configuration file such that one can initiate
+            a new database, key, etc.
+        """
+        suffix = '.old'
+        file_old = self.config_path / ('mdiary.conf' + suffix)
+        
+        while True: 
+            if not file_old.is_file():
+                break
 
-def main():
-    diary = Diary()
-    diary.main()
+            suffix += '.old'
+            file_old = self.config_path / ('mdiary.conf' + suffix)
 
-if __name__ == '__main__':
-    main()
+        self.config_file.rename(file_old)
+        
+    def gen_db(self):
+        if self.get_config()['db']:
+            self.db_handler = DBHandler(name=self.get_config()['db'])
+            self.db_handler.create()
+            self.db_handler.new_session()
+    
+    def close_diary(self):
+        self.db_handler.close()

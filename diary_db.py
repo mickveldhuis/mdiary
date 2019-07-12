@@ -3,6 +3,7 @@ from sqlalchemy import (Table, Column, Integer, Numeric, String,
                         Text, DateTime, create_engine, func)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from pathlib import Path
 
 Base = declarative_base()
 
@@ -17,8 +18,10 @@ class Entry(Base):
         return "Entry(text='{self.entry_text}', timestamp={self.timestamp})".format(self=self)
 
 class DBHandler():
-    def __init__(self, name='diary'):
+    def __init__(self, name='mdiary.db'):
         self.db_name = name
+        self.db_path = Path.home() / '.mdiary'
+        self.full_path = self.db_path / self.db_name  
         self.engine = None
         self.session = None
 
@@ -26,11 +29,13 @@ class DBHandler():
         """
             Create a new database.
         """
+        if not self.db_path.is_dir():
+            self.db_path.mkdir(exist_ok=True)
+
         if not self.engine:
-            self.engine = create_engine('sqlite:///{}.db'.format(self.db_name))
+            self.engine = create_engine('sqlite:///{}'.format(self.full_path))
         
         Base.metadata.create_all(self.engine)
-        print(datetime.now())
     
     def new_session(self):
         """
@@ -56,16 +61,16 @@ class DBHandler():
 
     def get_entries(self):
         """
-            Retrieve all entries. 
+            Retrieve all diary entries as a list of dictionaries. 
         """
         entries = self.session.query(Entry).all()
         res = map(lambda q: q.__dict__, entries)
         
-        return res
+        return list(res)
     
     def get_entries_raw(self):
         """
-            Returns all entries as a list of Entry objects.
+            Returns all diary entries as a iterable of Entry objects.
         """
         entries = self.session.query(Entry)
         
@@ -100,6 +105,9 @@ class DBHandler():
     #       return entry.text # Maybe not
     
     def get_entry_count(self):
+        """
+            Returns the number of entries stored in the database.
+        """
         counter = self.session.query(func.count(Entry.entry_text).label('entry_count')).first()
         return counter.entry_count
 

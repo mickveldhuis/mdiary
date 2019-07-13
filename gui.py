@@ -200,10 +200,9 @@ class ReaderView(urwid.WidgetWrap):
         self.controller = controller
 
         urwid.WidgetWrap.__init__(self, self.window())
-
+    
     def window(self):
         div = urwid.Divider()
-        div_bar = urwid.Divider('-')
 
         menu_btn = urwid.Button(u'To menu', self.on_to_menu)
         quit_btn = urwid.Button(('button', u'Quit'), self.on_quit)
@@ -220,13 +219,15 @@ class ReaderView(urwid.WidgetWrap):
             listbox_content += [entry_box, div]
 
         listbox_content += [col]
+        
+        self.walker = urwid.SimpleFocusListWalker(listbox_content)
+        self.listbox = urwid.ListBox(self.walker)
 
-        listbox = urwid.ListBox(urwid.SimpleFocusListWalker(listbox_content))
-        view = urwid.AttrMap(listbox, 'body')
+        view = urwid.AttrMap(self.listbox, 'body')
         view = urwid.LineBox(view, title='mDiary: Menu')
         to_file(type(view).__name__)
         return view
-    
+
     def gen_entry(self, id, date, txt):
         """
             Returns a listbox containing the information about diary entries.
@@ -260,10 +261,12 @@ class ReaderView(urwid.WidgetWrap):
 
     def on_to_menu(self, button):
         self.controller.set_view('menu')
-    
+
     def on_delete(self, button, id):
         self.controller.db_handler.remove_entry(id)
-        self.controller.set_view('reader') # For now this resets the view so that the removed item is not shown anymore
+
+        _, index = self.listbox.get_focus()
+        del self.walker[index:index+2] # Update the view and delete a divider
 
 class Diary:
     """

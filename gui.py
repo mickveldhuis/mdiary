@@ -5,6 +5,11 @@ from pathlib import Path
 from diary_db import DBHandler
 
 def to_file(txt, fn='_output.txt'):
+    """
+        Writes the string txt to a file.
+        (This function ONLY exists for debugging
+         purposes, and will soon be deleted...)
+    """
     file = open(fn, 'w+')
     file.write(txt)
     file.close()
@@ -18,13 +23,27 @@ PALETTE = [
     ('button', 'white', 'black')
 ]
 
-class WriterView(urwid.WidgetWrap):
-    """
-        Class responsible for providing the main application window.
-    """
+class BaseView(urwid.WidgetWrap):
     def __init__(self, controller):
         self.controller = controller
         urwid.WidgetWrap.__init__(self, self.window())
+    
+    def window(self):
+        pass
+
+    def quit_program(self):
+        raise urwid.ExitMainLoop()
+    
+    def on_quit(self, button):
+        self.quit_program()
+
+class WriterView(BaseView):
+    """
+        Class responsible for providing the application 
+        window handling the creation of new entries.
+    """
+    def __init__(self, controller):
+        super().__init__(controller)
 
     def window(self):
         div = urwid.Divider()
@@ -56,16 +75,10 @@ class WriterView(urwid.WidgetWrap):
 
         return view
 
-    def quit_program(self):
-        raise urwid.ExitMainLoop()
-    
     def on_save(self, button):
         txt = self.edit_field.get_text()[0]
 
         self.controller.db_handler.new_entry(txt)
-        self.quit_program()
-
-    def on_quit(self, button):
         self.quit_program()
     
     def on_to_menu(self, button):
@@ -77,13 +90,12 @@ class WriterView(urwid.WidgetWrap):
         
         self.controller.db_handler.new_entry(txt)
 
-class InitView(urwid.WidgetWrap):
+class InitView(BaseView):
     """
         Class responsible for providing the initialization window.
     """
     def __init__(self, controller):
-        self.controller = controller
-        urwid.WidgetWrap.__init__(self, self.window())
+        super().__init__(controller)
 
     def window(self):
         div = urwid.Divider()
@@ -139,12 +151,6 @@ class InitView(urwid.WidgetWrap):
             
             self.controller.gen_config(db_name, using_key)
 
-    def quit_program(self):
-        raise urwid.ExitMainLoop()
-
-    def on_quit(self, button):
-        self.quit_program()
-
     def on_confirm_quit(self, button):
         self.confirm_config()
         self.quit_program()
@@ -153,13 +159,12 @@ class InitView(urwid.WidgetWrap):
         self.confirm_config()
         self.controller.set_view('menu')
 
-class MenuView(urwid.WidgetWrap):
+class MenuView(BaseView):
     """
-        Class responsible for providing the initialization window.
+        Class responsible for providing the menu window.
     """
     def __init__(self, controller):
-        self.controller = controller
-        urwid.WidgetWrap.__init__(self, self.window())
+        super().__init__(controller)
 
     def window(self):
         div = urwid.Divider()
@@ -180,26 +185,19 @@ class MenuView(urwid.WidgetWrap):
 
         return view
 
-    def quit_program(self):
-        raise urwid.ExitMainLoop()
-
-    def on_quit(self, button):
-        self.quit_program()
-
     def on_to_writer(self, button):
         self.controller.set_view('writer')
 
     def on_to_reader(self, button):
         self.controller.set_view('reader')
 
-class ReaderView(urwid.WidgetWrap):
+class ReaderView(BaseView):
     """
-        Class responsible for providing the main application window.
+        Class responsible for providing the application window
+        handling the displaying / deleting of entries.
     """
     def __init__(self, controller):
-        self.controller = controller
-
-        urwid.WidgetWrap.__init__(self, self.window())
+        super().__init__(controller)
     
     def window(self):
         div = urwid.Divider()
@@ -252,12 +250,6 @@ class ReaderView(urwid.WidgetWrap):
                                  align='center', width=('relative', 80))
 
         return entry_lb
-
-    def quit_program(self):
-        raise urwid.ExitMainLoop()
-
-    def on_quit(self, button):
-        self.quit_program()
 
     def on_to_menu(self, button):
         self.controller.set_view('menu')

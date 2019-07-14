@@ -3,13 +3,17 @@ An easy to use terminal diary application (WIP). It's a summer project, so don't
 
 ## Using the application
 
-Simply run
+Run
 
 ```
 python main.py
 ```
 
-and the rest is (hopefully) apparent.
+and the rest is (hopefully) apparent. To get more information run
+
+```
+python main.py --help
+```
 
 ## Dependencies
 

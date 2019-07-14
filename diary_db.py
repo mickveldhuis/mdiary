@@ -58,6 +58,14 @@ class DBHandler():
         self.session.commit()
         
         return new_entry
+    
+    def get_entry(self, id):
+        """
+            Retrieve the diary entries that matches the id.
+        """
+        entry = self.session.query(Entry).filter(Entry.entry_id == id).first()
+        
+        return entry
 
     def get_entries(self):
         """
@@ -93,16 +101,14 @@ class DBHandler():
         query = query.filter_by(entry_id=id).scalar() 
         return query is not None
 
-    # def update_entry(self, id, txt):
-    #     """
-    #         TODO (no priority) 
-    #     """
-    #     # Would look something like
-    #       query = self.session.query(Entry)
-    #       entry = query.filter(Entry.entry_id == id).first()
-    #       entry.text = txt
-    #       self.session.commit()
-    #       return entry.text # Maybe not
+    def update_entry(self, id, txt):
+        """
+            Updates an entry.
+        """
+        query = self.session.query(Entry)
+        entry = query.filter(Entry.entry_id == id).first()
+        entry.entry_text = txt
+        self.session.commit()
     
     def get_entry_count(self):
         """

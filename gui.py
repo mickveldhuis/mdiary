@@ -150,31 +150,31 @@ class WriterView(BaseView):
 
     def window(self):
         div = urwid.Divider()
-        div_bar = urwid.Divider('-')
-
-        # Header
-        hd_txt = urwid.Text(u'mDiary: A Simple Diary Application', align='center')
-        header = urwid.Columns([div_bar, hd_txt, div_bar])
-        header = urwid.AttrMap(header, 'header')
-
-        # Body
+        
         self.edit_field = urwid.Edit(multiline=True)
-        body = urwid.AttrMap(self.edit_field, 'edit_body')
-        body = urwid.LineBox(body, title='New page:')
+        edit_box = urwid.AttrMap(self.edit_field, 'edit_body')
+        edit_box = urwid.LineBox(edit_box, title='New page:')
 
-        # Footer
         btn_quit = urwid.Button(('button', u'Quit'), self.on_quit)
         btn_save = urwid.Button(('button', u'Save & Exit'), self.on_save)
         btn_append = urwid.Button(('button', u'Add to diary'), self.on_append)
         btn_menu = urwid.Button(('button', u'To menu'), self.on_to_menu)
 
-        footer = urwid.Columns([btn_append, div, btn_save, div, btn_menu, div, btn_quit])
-        footer = urwid.AttrMap(footer, 'footer')
+        listbox_content = [
+            div,
+            urwid.Padding(edit_box, align='center', width=('relative', 90)),
+            div,
+            urwid.Padding(urwid.Columns([
+                urwid.Padding(btn_append, align='center', width=('relative', 80)),
+                urwid.Padding(btn_save, align='center', width=('relative', 80)),
+                urwid.Padding(btn_menu, align='center', width=('relative', 80)),
+                urwid.Padding(btn_quit, align='center', width=('relative', 80))
+            ]), align='center', width=('relative', 90)),
+        ]
 
-        # Container
-        pile = urwid.Pile([header, div, body, div, footer])
-        view = urwid.Filler(pile, valign='top')
-        view = urwid.AttrMap(view, 'container')
+        listbox = urwid.ListBox(urwid.SimpleFocusListWalker(listbox_content))
+        view = urwid.AttrMap(listbox, 'body')
+        view = urwid.LineBox(view, title='mDiary: New Entry')
 
         return view
 
@@ -212,9 +212,9 @@ class EditView(BaseView):
 
         listbox_content = [
             div,
-            urwid.Padding(self.edit_info, align='center', width=('relative', 80)),
+            urwid.Padding(self.edit_info, align='center', width=('relative', 90)),
             div,
-            urwid.Padding(input_field, align='center', width=('relative', 80)),
+            urwid.Padding(input_field, align='center', width=('relative', 90)),
             div,
             urwid.Columns([
                 urwid.Padding(urwid.Button(('button', u'Save changes'), self.on_save),

@@ -355,6 +355,13 @@ class ReaderView(BaseView):
         self.controller.views['edit'].set_state(id)
         self.controller.set_view('edit')
 
+class PatchedHelpFormatter(argparse.HelpFormatter):
+    def _split_lines(self, text, width):
+        """
+            Adds a blankline between arguments displayed by
+            the --help flag.
+        """
+        return [''] + super()._split_lines(text, width) + ['']
 class Diary:
     """
         Class controlling the behaviour of the application,
@@ -383,10 +390,11 @@ class Diary:
         if not self.config_path.is_dir():
             self.config_path.mkdir(exist_ok=True)
 
-        parser = argparse.ArgumentParser(description='A simple terminal diary, written in Python, with encryption possibilities.')
-        parser.add_argument('--key', '-k', help='Diary safety key!',
+        parser = argparse.ArgumentParser(description='A simple terminal diary, written in Python, with encryption possibilities.',
+                                         formatter_class=PatchedHelpFormatter)
+        parser.add_argument('--key', '-k', help='sets the location of the diary safety key! Make sure you always use the same key and for the sake of security, please do not keep the key in the original directory.',
                             action='store', dest='key')
-        parser.add_argument('--reset', '-r', help='Reset the configuration file.',
+        parser.add_argument('--reset', '-r', help='reset the configuration file. Such that a new diary instance can be created.',
                         action='store_true', dest='reset')
         parser.add_argument('--version', '-v', action='version', version='mdiary 0.0.2')
         parser_results = parser.parse_args()

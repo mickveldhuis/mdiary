@@ -22,8 +22,3 @@ This application requires a few python libraries.
 * urwid
 * sqlalchemy
 * cryptography
-
-## I (still) need to
-* think of a catchy name.
-* add the key security option.
-* etc.

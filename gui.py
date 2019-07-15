@@ -1,8 +1,11 @@
+import sys
 import urwid
 from configparser import ConfigParser
 import argparse
 from pathlib import Path
+from cryptography.fernet import Fernet, InvalidToken
 from diary_db import DBHandler
+
 
 def to_file(txt, fn='_output.txt'):
     """
@@ -30,12 +33,9 @@ class BaseView(urwid.WidgetWrap):
     
     def window(self):
         pass
-
-    def quit_program(self):
-        raise urwid.ExitMainLoop()
     
     def on_quit(self, button):
-        self.quit_program()
+        self.controller.quit_program()
 
 class InitView(BaseView):
     """
@@ -97,6 +97,11 @@ class InitView(BaseView):
                 using_key = 'true'
             
             self.controller.gen_config(db_name, using_key)
+
+            key_loc = Path('~/.mdiary') / (db_name + '.key')
+            key_loc = key_loc.expanduser()
+
+            self.controller.gen_key(key_loc)
 
     def on_confirm_quit(self, button):
         self.confirm_config()
@@ -181,6 +186,9 @@ class WriterView(BaseView):
     def on_save(self, button):
         txt = self.edit_field.get_text()[0]
 
+        if self.controller.is_using_key():
+            txt = self.controller.encrypt_entry(txt)
+        
         self.controller.db_handler.new_entry(txt)
         self.quit_program()
     
@@ -190,7 +198,10 @@ class WriterView(BaseView):
     def on_append(self, button):
         txt = self.edit_field.get_text()[0]
         self.edit_field.set_edit_text(u'')
-        
+
+        if self.controller.is_using_key():
+            txt = self.controller.encrypt_entry(txt)
+
         self.controller.db_handler.new_entry(txt)
 
 class EditView(BaseView):
@@ -236,7 +247,12 @@ class EditView(BaseView):
         self.id = id
 
         entry = self.controller.db_handler.get_entry(self.id)
-        self.edit_field.edit_text = entry.entry_text
+        entry_text = entry.entry_text
+
+        if self.controller.is_using_key():
+            entry_text = self.controller.decrypt_entry(entry_text)
+
+        self.edit_field.edit_text = entry_text
         info = u'Editting entry {}. Originally created on {}-{}-{}.'.format(self.id, entry.timestamp.year, 
                                                                             entry.timestamp.month, 
                                                                             entry.timestamp.day)
@@ -246,6 +262,10 @@ class EditView(BaseView):
     def on_save(self, button):
         if self.id:
             txt = self.edit_field.get_text()[0]
+            
+            if self.controller.is_using_key():
+                txt = self.controller.encrypt_entry(txt)
+            
             self.controller.db_handler.update_entry(self.id, txt)
         
         self.controller.set_view('reader')
@@ -275,7 +295,12 @@ class ReaderView(BaseView):
         listbox_content = [col, div]
 
         for entry in self.controller.db_handler.get_entries():
-            entry_box = self.gen_entry(entry['entry_id'], entry['timestamp'], entry['entry_text'])
+            entry_text = entry['entry_text']
+
+            if self.controller.is_using_key():
+                entry_text = self.controller.decrypt_entry(entry_text)
+
+            entry_box = self.gen_entry(entry['entry_id'], entry['timestamp'], entry_text)
             listbox_content += [entry_box, div]
 
         listbox_content += [col]
@@ -341,6 +366,8 @@ class Diary:
         self.config_file = self.config_path / 'mdiary.conf'
         self.config = ConfigParser()
         self.db_handler = None
+        self.key_file = None
+        self.key = None
 
         self.views = {
             'init': InitView(self),
@@ -364,18 +391,19 @@ class Diary:
         parser.add_argument('--version', '-v', action='version', version='mdiary 0.0.2')
         parser_results = parser.parse_args()
  
-        # if self.get_config().using_key and parser_results.key:
-        #     self.key_file = parser_results.key
-        # elif self.get_config().using_key and not parser_results.key:
-        #     print('Use your key to get access to the diary by using the [--key, -k KEY] argument!')
-        #     sys.exit()
-
         if parser_results.reset and self.config_file.is_file():
             self.reset_config()
 
         if not self.config_file.is_file():
             init_view = self.views['init']
         else:
+            if self.is_using_key() and parser_results.key:
+                self.key_file = Path(parser_results.key).expanduser()
+                self.set_key()
+            elif self.is_using_key() and not parser_results.key:
+                print('Use your key to get access to the diary by using the [--key, -k KEY] argument!')
+                sys.exit()
+            
             init_view = self.views['menu']
             self.gen_db()
 
@@ -444,5 +472,49 @@ class Diary:
             self.db_handler.create()
             self.db_handler.new_session()
     
+    def gen_key(self, key_fn):
+        """
+            Generates a key at the <Path> key_fn.
+        """
+        self.key_file = key_fn
+
+        if self.key_file:
+            self.key_file.touch()
+            key = Fernet.generate_key()
+            self.key_file.write_bytes(key)
+
+            self.set_key()
+        else:
+            raise AttributeError('self.key_file does not exist, SET IT IDIOT!')
+        
+    def set_key(self):
+        if self.key_file.is_file():
+            key = self.key_file.read_bytes()
+            self.key = key
+        else:
+            raise AttributeError('The key_file attribute is not valid or does not exist!')
+    
+    def encrypt_entry(self, text):
+        f = Fernet(self.key)
+        enc = f.encrypt(text.encode())
+
+        return enc
+    
+    def decrypt_entry(self, enc_text):
+        f = Fernet(self.key)
+
+        try:
+            dec = f.decrypt(enc_text)
+        except InvalidToken:
+            self.quit_program()
+
+        return dec.decode()
+    
+    def is_using_key(self):
+        return self.get_config()['using_key']
+    
     def close_diary(self):
         self.db_handler.close()
+    
+    def quit_program(self):
+        raise urwid.ExitMainLoop()

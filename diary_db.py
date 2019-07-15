@@ -3,6 +3,7 @@ from sqlalchemy import (Table, Column, Integer, Numeric, String,
                         Text, DateTime, create_engine, func)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm.exc import NoResultFound
 from pathlib import Path
 
 Base = declarative_base()
@@ -88,10 +89,14 @@ class DBHandler():
         """
             Delete an entry given its id.
         """
-        query = self.session.query(Entry).filter(Entry.entry_id == id)
-        d_entry = query.one()
-        self.session.delete(d_entry)
-        self.session.commit()
+        try:
+            query = self.session.query(Entry).filter(Entry.entry_id == id)
+            d_entry = query.one()
+            self.session.delete(d_entry)
+            self.session.commit()
+        except NoResultFound:
+            pass
+
     
     def entry_exists(self, id):
         """

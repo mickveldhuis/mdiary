@@ -5,16 +5,7 @@ import argparse
 from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
 from mdiary.database import DBHandler
-
-def to_file(txt, fn='_output.log'):
-    """
-        Writes the string txt to a file.
-        (This function ONLY exists for debugging
-         purposes, and will soon be deleted...)
-    """
-    file = open(fn, 'w+')
-    file.write(txt)
-    file.close()
+from passlib.hash import pbkdf2_sha256
 
 PALETTE = [
     ('edit_body', 'black', 'light green'),
@@ -33,8 +24,11 @@ class BaseView(urwid.WidgetWrap):
     def window(self):
         pass
     
-    def on_quit(self, button):
+    def quit_program(self):
         self.controller.quit_program()
+
+    def on_quit(self, button):
+        self.quit_program()
 
 class InitView(BaseView):
     """
@@ -101,6 +95,7 @@ class InitView(BaseView):
             key_loc = key_loc.expanduser()
 
             self.controller.gen_key(key_loc)
+            self.controller.gen_key_hash()
 
     def on_confirm_quit(self, button):
         self.confirm_config()
@@ -309,7 +304,7 @@ class ReaderView(BaseView):
 
         view = urwid.AttrMap(self.listbox, 'body')
         view = urwid.LineBox(view, title='mDiary: Entry Browser')
-        to_file(type(view).__name__)
+
         return view
 
     def gen_entry(self, id, date, txt):
@@ -369,6 +364,7 @@ class Diary:
     """
 
     def __init__(self):
+        self.hash_path = Path.home() / '.mdiary'
         self.config_path = Path.home() / '.config' / 'mdiary'
         self.config_file = self.config_path / 'mdiary.conf'
         self.config = ConfigParser()
@@ -408,6 +404,10 @@ class Diary:
             if self.is_using_key() and parser_results.key:
                 self.key_file = Path(parser_results.key).expanduser()
                 self.set_key()
+                
+                if not self.verify_key_hash():
+                    print('Use the appropiate key!')
+                    sys.exit()
             elif self.is_using_key() and not parser_results.key:
                 print('Use your key to get access to the diary by using the [--key, -k KEY] argument!')
                 sys.exit()
@@ -502,6 +502,20 @@ class Diary:
         else:
             raise AttributeError('The key_file attribute is not valid or does not exist!')
     
+
+    def gen_key_hash(self):
+        hashed_key = pbkdf2_sha256.hash(self.key)
+
+        hf = self.hash_path / (self.get_config()['db'] + '.keyhash')
+        hf.write_text(hashed_key)
+
+    def verify_key_hash(self, key=None):
+        if not key:
+            key = self.key
+        hf = self.hash_path / (self.get_config()['db'] + '.keyhash')
+        return pbkdf2_sha256.verify(key, hf.read_text())
+        
+
     def encrypt_entry(self, text):
         f = Fernet(self.key)
         enc = f.encrypt(text.encode())

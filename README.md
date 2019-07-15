@@ -6,18 +6,18 @@ An easy to use terminal diary application (WIP). It's a summer project, so don't
 Run
 
 ```
-python main.py
+python mdiary.py
 ```
 
 and the rest is (hopefully) apparent. To get more information run
 
 ```
-python main.py --help
+python mdiary.py --help
 ```
 
 ## Dependencies
 
-This application requires a few python libraries.
+This application requires the following libraries to be installed:
 
 * urwid
 * sqlalchemy

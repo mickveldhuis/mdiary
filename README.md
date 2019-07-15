@@ -22,3 +22,4 @@ This application requires the following libraries to be installed:
 * urwid
 * sqlalchemy
 * cryptography
+* passlib

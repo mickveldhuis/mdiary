@@ -4,10 +4,9 @@ from configparser import ConfigParser
 import argparse
 from pathlib import Path
 from cryptography.fernet import Fernet, InvalidToken
-from diary_db import DBHandler
+from mdiary.database import DBHandler
 
-
-def to_file(txt, fn='_output.txt'):
+def to_file(txt, fn='_output.log'):
     """
         Writes the string txt to a file.
         (This function ONLY exists for debugging
@@ -362,6 +361,7 @@ class PatchedHelpFormatter(argparse.HelpFormatter):
             the --help flag.
         """
         return [''] + super()._split_lines(text, width) + ['']
+
 class Diary:
     """
         Class controlling the behaviour of the application,

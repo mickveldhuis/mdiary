@@ -4,4 +4,4 @@
 __pycache__/
 tests/
 .vscode/
-*.txt
+*.log

@@ -1,11 +1,11 @@
 import sys
-import urwid
 from configparser import ConfigParser
 import argparse
 from pathlib import Path
+import urwid
 from cryptography.fernet import Fernet, InvalidToken
-from mdiary.database import DBHandler
 from passlib.hash import pbkdf2_sha256
+from mdiary.database import DBHandler
 
 PALETTE = [
     ('edit_body', 'black', 'light green'),

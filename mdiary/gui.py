@@ -20,10 +20,10 @@ class BaseView(urwid.WidgetWrap):
     def __init__(self, controller):
         self.controller = controller
         urwid.WidgetWrap.__init__(self, self.window())
-    
+
     def window(self):
         pass
-    
+
     def quit_program(self):
         self.controller.quit_program()
 
@@ -88,7 +88,7 @@ class InitView(BaseView):
         if db_name:
             if self.yes.state:
                 using_key = 'true'
-            
+
             self.controller.gen_config(db_name, using_key)
 
             key_loc = Path('~/.mdiary') / (db_name + '.key')
@@ -209,7 +209,7 @@ class EditView(BaseView):
 
     def window(self):
         div = urwid.Divider()
-        
+
         self.edit_field = urwid.Edit(multiline=True)
         input_field = urwid.LineBox(urwid.AttrMap(self.edit_field, 'edit_body'))
 
@@ -236,7 +236,7 @@ class EditView(BaseView):
         view = urwid.LineBox(view, title='mDiary: Edit entry {}'.format(self.id))
 
         return view
-    
+
     def set_state(self, id):
         self.id = id
 
@@ -247,23 +247,23 @@ class EditView(BaseView):
             entry_text = self.controller.decrypt_entry(entry_text)
 
         self.edit_field.edit_text = entry_text
-        info = u'Editting entry {}. Originally created on {}-{}-{}.'.format(self.id, entry.timestamp.year, 
-                                                                            entry.timestamp.month, 
+        info = u'Editting entry {}. Originally created on {}-{}-{}.'.format(self.id, entry.timestamp.year,
+                                                                            entry.timestamp.month,
                                                                             entry.timestamp.day)
         self.edit_info.set_text(info)
-        
+
 
     def on_save(self, button):
         if self.id:
             txt = self.edit_field.get_text()[0]
-            
+
             if self.controller.is_using_key():
                 txt = self.controller.encrypt_entry(txt)
-            
+
             self.controller.db_handler.update_entry(self.id, txt)
-        
+
         self.controller.set_view('reader')
-    
+
     def on_cancel(self, button):
         self.controller.set_view('reader')
 
@@ -274,30 +274,9 @@ class ReaderView(BaseView):
     """
     def __init__(self, controller):
         super().__init__(controller)
-    
+
     def window(self):
-        div = urwid.Divider()
-
-        menu_btn = urwid.Button(u'To menu', self.on_to_menu)
-        quit_btn = urwid.Button(('button', u'Quit'), self.on_quit)
-
-        col = urwid.Columns([
-            urwid.Padding(menu_btn, align='center', width=('relative', 50)), 
-            urwid.Padding(quit_btn, align='center', width=('relative', 50))
-        ])
-
-        listbox_content = [col, div]
-
-        for entry in self.controller.db_handler.get_entries():
-            entry_text = entry['entry_text']
-
-            if self.controller.is_using_key():
-                entry_text = self.controller.decrypt_entry(entry_text)
-
-            entry_box = self.gen_entry(entry['entry_id'], entry['timestamp'], entry_text)
-            listbox_content += [entry_box, div]
-
-        listbox_content += [col]
+        listbox_content = []
         
         self.walker = urwid.SimpleFocusListWalker(listbox_content)
         self.listbox = urwid.ListBox(self.walker)
@@ -345,6 +324,32 @@ class ReaderView(BaseView):
         _, index = self.listbox.get_focus()
         del self.walker[index:index+2] # Update the view and delete a divider
     
+    def update_reader(self):
+        div = urwid.Divider()
+
+        menu_btn = urwid.Button(u'To menu', self.on_to_menu)
+        quit_btn = urwid.Button(('button', u'Quit'), self.on_quit)
+
+        col = urwid.Columns([
+            urwid.Padding(menu_btn, align='center', width=('relative', 50)), 
+            urwid.Padding(quit_btn, align='center', width=('relative', 50))
+        ])
+
+        lb_content = [col, div]
+
+        for entry in self.controller.db_handler.get_entries():
+            entry_text = entry['entry_text']
+
+            if self.controller.is_using_key():
+                entry_text = self.controller.decrypt_entry(entry_text)
+
+            entry_box = self.gen_entry(entry['entry_id'], entry['timestamp'], entry_text)
+            lb_content += [entry_box, div]
+
+        lb_content += [col]
+
+        self.walker[:] = lb_content 
+    
     def on_update(self, button, id):
         self.controller.views['edit'].set_state(id)
         self.controller.set_view('edit')
@@ -376,7 +381,8 @@ class Diary:
             'init': InitView(self),
             'writer': WriterView(self),
             'menu': MenuView(self),
-            'edit': EditView(self)
+            'edit': EditView(self),
+            'reader': ReaderView(self)
         }
 
     def main(self):
@@ -423,9 +429,8 @@ class Diary:
             Set the view to either 'writer', 'reader', 'menu' or 'init'.
         """
         if id == 'reader':
-            self.loop.widget = ReaderView(self)
-        else:
-            self.loop.widget = self.views[id]
+            self.views[id].update_reader()
+        self.loop.widget = self.views[id]
 
     def gen_config(self, db_name, using_key):
         """
